@@ -1,0 +1,176 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - private data owned by authenticated users
+    match /users/{userId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Products collection - public read, admin write
+    match /product/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+    
+    // Communities collection - public read, authenticated users can create/write
+    match /communities/{communityId} {
+      allow read: if true;
+      allow create, update: if request.auth != null;
+      allow delete: if request.auth != null && 
+        (resource.data.createdBy == request.auth.uid || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin');
+    }
+    
+    // Community memberships - users can manage their own memberships
+    match /community_memberships/{membershipId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin');
+    }
+    
+    // Posts - public read, authenticated users can create, owners can modify
+    match /post/{postId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin');
+    }
+    
+    // Comments - authenticated users only
+    match /commentsecction/{commentId} {
+      allow read, create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.userId || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin');
+    }
+    
+    // Chat collections - participants only
+    match /chats/{chatId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid in resource.data.participants;
+    }
+    
+    match /chats2/{chatId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid in resource.data.participants;
+    }
+    
+    match /chatscollection/{chatId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid in resource.data.participants;
+    }
+    
+    // Chat messages - participants only
+    match /chatmessages/{messageId} {
+      allow read, create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        request.auth.uid == resource.data.senderId;
+    }
+    
+    match /chatmessagesgroup/{messageId} {
+      allow read, create: if request.auth != null;
+      allow update, delete: if request.auth != null && 
+        request.auth.uid == resource.data.senderId;
+    }
+    
+    // Groups - authenticated users can read/join, creators can manage
+    match /group/{groupId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == resource.data.createdBy;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.createdBy || 
+         request.auth.uid in resource.data.admins);
+    }
+    
+    match /groups/{groupId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == resource.data.createdBy;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.createdBy || 
+         request.auth.uid in resource.data.admins);
+    }
+    
+    // Events - public read, authenticated users can create
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == resource.data.createdBy;
+      allow update, delete: if request.auth != null && 
+        (request.auth.uid == resource.data.createdBy || 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin');
+    }
+    
+    // Tickets - users can manage their own tickets
+    match /tickets/{ticketId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    match /ticket_types/{typeId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+    
+    // Orders and cart - users can manage their own
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    match /orders2/{orderId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    match /order_items/{itemId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /order_add_ons/{addonId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    match /cart/{cartId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Courses - public read, authenticated users can enroll
+    match /course/{courseId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+    
+    match /coursemodules/{moduleId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+    
+    // News - public read, admin write
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+    
+    // App preferences - users can manage their own
+    match /app_preference/{prefId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
+    // Product ID tracking - admin only
+    match /productid/{docId} {
+      allow read, write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userType == 'admin';
+    }
+  }
+}
