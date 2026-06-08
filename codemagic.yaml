@@ -1,0 +1,89 @@
+# ──────────────────────────────────────────────────────
+# DigitalRadicalz — Codemagic CI/CD Configuration
+# ──────────────────────────────────────────────────────
+# Codemagic provides free macOS runners for Flutter projects.
+# This configuration builds the iOS IPA and uploads to TestFlight.
+#
+# Setup:
+#   1. Go to https://codemagic.io and sign up
+#   2. Connect your GitHub repository
+#   3. Add environment variables in Codemagic UI:
+#      - APP_STORE_CONNECT_KEY_ID: A2NL3S75NT
+#      - APP_STORE_CONNECT_ISSUER_ID: 449d6521-c62c-4f7c-a7d0-8a2d9b4fd43f
+#      - APP_STORE_CONNECT_PRIVATE_KEY: (contents of AuthKey_A2NL3S75NT.p8)
+#   4. Start a build
+# ──────────────────────────────────────────────────────
+
+workflows:
+  ios-testflight:
+    name: DigitalRadicalz TestFlight
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mycompany.brightwave
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_STORE_CONNECT_KEY_ID: "A2NL3S75NT"
+        APP_STORE_CONNECT_ISSUER_ID: "449d6521-c62c-4f7c-a7d0-8a2d9b4fd43f"
+        BUNDLE_ID: "com.mycompany.brightwave"
+        TEAM_ID: "852QBVFRUN"
+      groups:
+        - app_store_credentials  # Add APP_STORE_CONNECT_PRIVATE_KEY in Codemagic UI
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+        - pattern: develop
+          include: true
+
+    scripts:
+      - name: Set up local properties
+        script: echo "flutter.minSdkVersion=21" > "$CM_BUILD_DIR/android/local.properties"
+
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+
+      - name: Install CocoaPods
+        script: |
+          cd ios && pod install
+
+      - name: Set up App Store Connect API Key
+        script: |
+          mkdir -p ~/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa \
+            --release \
+            --export-method app-store \
+            --build-number=$(($(date +%s)))
+
+      - name: Upload to TestFlight
+        script: |
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file build/ios/ipa/*.ipa \
+            --apiKey "$APP_STORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
+            --show-progress
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - ci@digitalradicalz.com
+        notify:
+          success: true
+          failure: true
