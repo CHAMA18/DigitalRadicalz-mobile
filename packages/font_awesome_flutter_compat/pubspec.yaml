@@ -1,0 +1,12 @@
+name: font_awesome_flutter
+description: Compatibility shim for font_awesome_flutter with Flutter 3.27+
+version: 10.9.1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:

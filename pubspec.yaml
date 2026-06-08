@@ -69,15 +69,13 @@ dependencies:
   flutter_cache_manager: 3.4.1
   flutter_native_splash: 2.4.1
   flutter_plugin_android_lifecycle: 2.0.28
-  font_awesome_flutter: any
-  font_awesome_flutter_nominal:
-    git:
-      url: https://github.com/nicverloop/font_awesome_flutter_nominal.git
-      ref: main
+  font_awesome_flutter:
+    path: packages/font_awesome_flutter_compat
   from_css_color: 2.0.0
   geolocator: 13.0.4
   go_router: 12.1.3
-  google_fonts: any
+  google_fonts:
+    path: packages/google_fonts_compat
   google_sign_in: 6.3.0
   google_sign_in_android: 6.2.1
   google_sign_in_ios: 5.9.0
@@ -96,7 +94,8 @@ dependencies:
   json_path: 0.7.2
   lottie: 3.1.2
   mime_type: 1.0.0
-  page_transition: any
+  page_transition:
+    path: packages/page_transition_compat
   path_provider: 2.1.4
   path_provider_android: 2.2.10
   path_provider_foundation: 2.4.0
@@ -148,14 +147,6 @@ dependencies:
 dependency_overrides:
   http: 1.4.0
   uuid: ^4.0.0
-  font_awesome_flutter:
-    git:
-      url: https://github.com/nicverloop/font_awesome_flutter_nominal.git
-      ref: main
-  google_fonts:
-    git:
-      url: https://github.com/nicverloop/google_fonts_fix.git
-      ref: main
 
 dev_dependencies:
   flutter_launcher_icons: 0.13.1
