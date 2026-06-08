@@ -1,1 +1,1 @@
-# DigitalRadicalz PWA - Static Web Build
+# DigitalRadicalz PWA
