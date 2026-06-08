@@ -154,12 +154,8 @@ dependency_overrides:
       ref: main
   google_fonts:
     git:
-      url: https://github.com/KohiIcex/google_fonts_fix.git
+      url: https://github.com/nicverloop/google_fonts_fix.git
       ref: main
-  page_transition:
-    git:
-      url: https://github.com/yayuyohana/page_transition.git
-      ref: master
 
 dev_dependencies:
   flutter_launcher_icons: 0.13.1
