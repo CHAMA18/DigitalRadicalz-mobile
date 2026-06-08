@@ -4,19 +4,16 @@
 # Codemagic provides free macOS runners for Flutter projects.
 # This configuration builds the iOS IPA and uploads to TestFlight.
 #
-# Setup:
-#   1. Go to https://codemagic.io and sign up
-#   2. Connect your GitHub repository
-#   3. Add environment variables in Codemagic UI:
-#      - APP_STORE_CONNECT_KEY_ID: A2NL3S75NT
-#      - APP_STORE_CONNECT_ISSUER_ID: 449d6521-c62c-4f7c-a7d0-8a2d9b4fd43f
-#      - APP_STORE_CONNECT_PRIVATE_KEY: (contents of AuthKey_A2NL3S75NT.p8)
-#   4. Start a build
+# Secrets are stored in the "app-store-connect" variable group
+# (configured via Codemagic API).
 # ──────────────────────────────────────────────────────
 
 workflows:
   ios-testflight:
     name: DigitalRadicalz TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
     environment:
       ios_signing:
         distribution_type: app_store
@@ -25,12 +22,10 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        APP_STORE_CONNECT_KEY_ID: "A2NL3S75NT"
-        APP_STORE_CONNECT_ISSUER_ID: "449d6521-c62c-4f7c-a7d0-8a2d9b4fd43f"
         BUNDLE_ID: "com.mycompany.brightwave"
         TEAM_ID: "852QBVFRUN"
       groups:
-        - app_store_credentials  # Add APP_STORE_CONNECT_PRIVATE_KEY in Codemagic UI
+        - app-store-connect
 
     triggering:
       events:
@@ -47,7 +42,7 @@ workflows:
 
       - name: Get Flutter packages
         script: |
-          flutter packages pub get
+          flutter pub get
 
       - name: Install CocoaPods
         script: |
@@ -57,20 +52,35 @@ workflows:
         script: |
           mkdir -p ~/private_keys
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8
+          ls -la ~/private_keys/
+
+      - name: Set build number
+        script: |
+          # Use epoch timestamp as build number for uniqueness
+          export BUILD_NUMBER=$(($(date +%s)))
+          echo "Build number: $BUILD_NUMBER"
 
       - name: Build iOS IPA
         script: |
           flutter build ipa \
             --release \
-            --export-method app-store \
-            --build-number=$(($(date +%s)))
+            --export-method app-store
 
-      - name: Upload to TestFlight
+      - name: Upload to TestFlight via altool
         script: |
+          find build/ios/ipa -name "*.ipa" -exec echo "Found IPA: {}" \;
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found, checking archive..."
+            find build/ios -name "*.ipa" 2>/dev/null
+            find . -name "*.ipa" 2>/dev/null
+            exit 1
+          fi
+          echo "Uploading IPA: $IPA_PATH"
           xcrun altool \
             --upload-app \
             --type ios \
-            --file build/ios/ipa/*.ipa \
+            --file "$IPA_PATH" \
             --apiKey "$APP_STORE_CONNECT_KEY_ID" \
             --apiIssuer "$APP_STORE_CONNECT_ISSUER_ID" \
             --show-progress
@@ -78,7 +88,6 @@ workflows:
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-      - flutter_drive.log
 
     publishing:
       email:
