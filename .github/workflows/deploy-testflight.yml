@@ -2,8 +2,8 @@
 # DigitalRadicalz — TestFlight Deployment Pipeline
 # ──────────────────────────────────────────────────────
 # Triggers:
+#   • Manual dispatch (workflow_dispatch) — primary
 #   • Push to main/develop branch
-#   • Manual dispatch (workflow_dispatch)
 #
 # Pipeline:
 #   1. Checkout code
@@ -17,22 +17,17 @@
 name: Deploy to TestFlight
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, master, develop]
     paths-ignore:
       - "**.md"
       - "docs/**"
       - ".gitignore"
-  workflow_dispatch:
-    inputs:
-      upload_to_testflight:
-        description: "Upload to TestFlight after building?"
-        required: false
-        default: "true"
-        type: choice
-        options:
-          - "true"
-          - "false"
+
+permissions:
+  contents: read
+  actions: write
 
 concurrency:
   group: ios-deploy-${{ github.ref }}
@@ -40,117 +35,101 @@ concurrency:
 
 env:
   FLUTTER_VERSION: "3.27.4"
-  XCODE_VERSION: "16.2"
   APP_BUNDLE_ID: "com.mycompany.brightwave"
   TEAM_ID: "852QBVFRUN"
 
 jobs:
   build-and-deploy:
     name: Build iOS & Deploy to TestFlight
-    runs-on: macos-14
-    timeout-minutes: 60
+    runs-on: macos-latest
+    timeout-minutes: 90
 
     steps:
       # ── 1. Checkout ──────────────────────────────
-      - name: 📦 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      # ── 2. Select Xcode ─────────────────────────
-      - name: 🔧 Select Xcode ${{ env.XCODE_VERSION }}
-        run: |
-          sudo xcode-select -s /Applications/Xcode_${{ env.XCODE_VERSION }}.app/Contents/Developer
-          xcodebuild -version
-          xcode-select -p
-
-      # ── 3. Set up Flutter ────────────────────────
-      - name: 🐦 Set up Flutter SDK
+      # ── 2. Set up Flutter ────────────────────────
+      - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: "stable"
           cache: true
 
-      - name: ✅ Verify Flutter installation
+      - name: Verify Flutter installation
         run: |
           flutter --version
           flutter doctor -v
 
-      # ── 4. Install dependencies ──────────────────
-      - name: 📥 Flutter pub get
+      # ── 3. Install dependencies ──────────────────
+      - name: Flutter pub get
         run: flutter pub get
 
-      - name: 📥 Install CocoaPods
+      - name: Install CocoaPods
         working-directory: ios
         run: |
           gem install cocoapods --no-document
           pod install --repo-update
 
-      # ── 5. Set up App Store Connect API Key ─────
-      - name: 🔑 Decode App Store Connect API Key
+      # ── 4. Set up App Store Connect API Key ─────
+      - name: Decode App Store Connect API Key
         env:
           API_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_P8 }}
         run: |
           mkdir -p ~/private_keys
           echo "$API_KEY_P8_BASE64" | base64 --decode > ~/private_keys/AuthKey_A2NL3S75NT.p8
-          echo "API key decoded and placed at ~/private_keys/AuthKey_A2NL3S75NT.p8"
-          # Verify the key file
-          if [ -f ~/private_keys/AuthKey_A2NL3S75NT.p8 ]; then
-            echo "✅ API key file exists"
-            ls -la ~/private_keys/AuthKey_A2NL3S75NT.p8
-          else
-            echo "❌ API key file not found"
-            exit 1
-          fi
+          echo "API key decoded successfully"
+          ls -la ~/private_keys/AuthKey_A2NL3S75NT.p8
 
-      # ── 6. Install Fastlane ─────────────────────
-      - name: 🚀 Install Fastlane
+      # ── 5. Install Fastlane ─────────────────────
+      - name: Install Fastlane
         run: |
           gem install fastlane --no-document
           fastlane --version
 
-      # ── 7. Build & Upload to TestFlight ─────────
-      - name: 🏗️ Build and Deploy to TestFlight
+      # ── 6. Build & Upload to TestFlight ─────────
+      - name: Build and Deploy to TestFlight
         working-directory: ios
         env:
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_PATH: "/Users/runner/private_keys/AuthKey_A2NL3S75NT.p8"
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
         run: |
           fastlane testflight
 
-      # ── 8. Upload Artifacts ─────────────────────
-      - name: 📤 Upload build artifacts
+      # ── 7. Upload Artifacts ─────────────────────
+      - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ios-build-artifacts
           path: |
             ios/build/
-            ios/derived_data/
           retention-days: 14
 
-      # ── 9. Clean up ─────────────────────────────
-      - name: 🧹 Clean up API key
+      # ── 8. Clean up ─────────────────────────────
+      - name: Clean up API key
         if: always()
         run: |
           rm -rf ~/private_keys
           echo "API key cleaned up"
 
-      # ── 10. Summary ─────────────────────────────
-      - name: 📋 Deployment Summary
+      # ── 9. Summary ─────────────────────────────
+      - name: Deployment Summary
         if: success()
         run: |
-          echo "──────────────────────────────────────────"
+          echo "========================================"
           echo "  DigitalRadicalz — TestFlight Deployment"
-          echo "──────────────────────────────────────────"
-          echo "  ✅ Build completed successfully"
-          echo "  ✅ IPA uploaded to TestFlight"
+          echo "========================================"
+          echo "  Build completed successfully"
+          echo "  IPA uploaded to TestFlight"
           echo ""
           echo "  Bundle ID: com.mycompany.brightwave"
           echo "  Team ID:   852QBVFRUN"
           echo "  Branch:    ${{ github.ref_name }}"
           echo "  Commit:    ${{ github.sha }}"
           echo "  Run:       ${{ github.run_number }}"
-          echo "──────────────────────────────────────────"
+          echo "========================================"
