@@ -2,8 +2,9 @@ services:
   - type: static_site
     name: digitalradicalz-pwa
     repo: https://github.com/CHAMA18/DigitalRadicalz-mobile
-    branch: web-deploy
-    publishPath: .
+    branch: main
+    buildCommand: export PATH="$HOME/flutter/bin:$PATH" && flutter build web --release
+    publishPath: build/web
     pullRequestPreviewsEnabled: false
     headers:
       - path: /*
@@ -21,3 +22,10 @@ services:
       - path: /flutter_service_worker.js
         name: Cache-Control
         value: no-cache
+      - path: /manifest.json
+        name: Cache-Control
+        value: public, max-age=3600
+    redirects:
+      - source: //*
+        target: /index.html
+        statusCode: 200
