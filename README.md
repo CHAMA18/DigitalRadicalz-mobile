@@ -1,1 +1,1 @@
-# Static web files only - do not edit manually
+# DigitalRadicalz PWA - Static Web Build
