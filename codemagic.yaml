@@ -79,6 +79,7 @@ workflows:
             -authenticationKeyPath ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8 \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
             2>&1 | tee /tmp/archive.log
 
           echo ""
