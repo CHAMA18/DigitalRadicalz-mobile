@@ -79,6 +79,9 @@ class FontAwesomeIcons {
   static const IconData tiktok = IconData(0xe07b, fontFamily: _fontFamily, fontPackage: 'font_awesome_flutter', matchTextDirection: true);
   static const IconData linkedin = IconData(0xf08c, fontFamily: _fontFamily, fontPackage: 'font_awesome_flutter', matchTextDirection: true);
   
+  static const IconData angleDown = IconData(0xf107, fontFamily: _fontFamilySolid, fontPackage: 'font_awesome_flutter', matchTextDirection: true);
+  static const IconData smile = IconData(0xf118, fontFamily: _fontFamilyRegular, fontPackage: 'font_awesome_flutter', matchTextDirection: true);
+  
   // Alias for solid icons
   static const IconData solidHome = home;
   static const IconData solidUser = user;
