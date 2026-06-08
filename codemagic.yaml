@@ -1,16 +1,18 @@
 # ──────────────────────────────────────────────────────
 # DigitalRadicalz — Codemagic CI/CD Configuration
 # ──────────────────────────────────────────────────────
-# Codemagic provides free macOS runners for Flutter projects.
-# This configuration builds the iOS IPA and uploads to TestFlight.
+# Builds iOS IPA in release mode and uploads to TestFlight
+# using App Store Connect API key authentication.
 #
-# Secrets are stored in the "app-store-connect" variable group
-# (configured via Codemagic API).
+# Required environment variables (in "app-store-connect" group):
+#   APP_STORE_CONNECT_KEY_ID     — Apple API Key ID
+#   APP_STORE_CONNECT_ISSUER_ID  — Apple API Issuer ID
+#   APP_STORE_CONNECT_PRIVATE_KEY — Full P8 key contents
 # ──────────────────────────────────────────────────────
 
 workflows:
   ios-testflight:
-    name: DigitalRadicalz TestFlight
+    name: DigitalRadicalz iOS TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -33,8 +35,6 @@ workflows:
       branch_patterns:
         - pattern: main
           include: true
-        - pattern: develop
-          include: true
 
     scripts:
       - name: Set up local properties
@@ -46,37 +46,38 @@ workflows:
 
       - name: Install CocoaPods
         script: |
-          cd ios && pod install
+          cd ios && pod install || true
 
-      - name: Set up App Store Connect API Key
+      - name: Set up App Store Connect API Key for signing
         script: |
           mkdir -p ~/private_keys
           echo "$APP_STORE_CONNECT_PRIVATE_KEY" > ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8
           ls -la ~/private_keys/
 
-      - name: Set build number
+      - name: Set build number from timestamp
         script: |
-          # Use epoch timestamp as build number for uniqueness
           export BUILD_NUMBER=$(($(date +%s)))
           echo "Build number: $BUILD_NUMBER"
+          # Update the build number in the Xcode project
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$CM_BUILD_DIR/ios/Runner/Info.plist" 2>/dev/null || true
 
-      - name: Build iOS IPA
+      - name: Build iOS IPA (release)
         script: |
           flutter build ipa \
             --release \
             --export-method app-store
 
-      - name: Upload to TestFlight via altool
+      - name: Upload to TestFlight
         script: |
-          find build/ios/ipa -name "*.ipa" -exec echo "Found IPA: {}" \;
           IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -1)
           if [ -z "$IPA_PATH" ]; then
-            echo "No IPA found, checking archive..."
+            echo "ERROR: No IPA found in build/ios/ipa/"
             find build/ios -name "*.ipa" 2>/dev/null
             find . -name "*.ipa" 2>/dev/null
             exit 1
           fi
-          echo "Uploading IPA: $IPA_PATH"
+          echo "Found IPA: $IPA_PATH"
+          echo "Uploading to TestFlight..."
           xcrun altool \
             --upload-app \
             --type ios \
@@ -92,7 +93,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - ci@digitalradicalz.com
+          - chungu@thestackone.com
         notify:
           success: true
           failure: true

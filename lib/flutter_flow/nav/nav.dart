@@ -581,8 +581,7 @@ class FFRoute {
                           PageTransition(
                     type: transitionInfo.transitionType,
                     duration: transitionInfo.duration,
-                    reverseDuration: transitionInfo.duration,
-                    alignment: transitionInfo.alignment,
+                    alignment: transitionInfo.alignment ?? Alignment.center,
                     child: child,
                   ).buildTransitions(
                     context,

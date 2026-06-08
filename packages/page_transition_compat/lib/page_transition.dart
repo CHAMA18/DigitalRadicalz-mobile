@@ -45,7 +45,6 @@ class PageTransition<T> extends PageRouteBuilder<T> {
     this.ctx,
     super.settings,
     super.fullscreenDialog,
-    super.reverseDuration,
     super.opaque,
     super.barrierDismissible,
     super.barrierColor,
