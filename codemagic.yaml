@@ -1,12 +1,12 @@
 # ──────────────────────────────────────────────────────
 # DigitalRadicalz — Codemagic CI/CD Configuration
 # ──────────────────────────────────────────────────────
-# Builds iOS IPA in release mode and uploads to TestFlight
-# using App Store Connect API key authentication.
-#
-# Strategy: Archive with automatic development signing,
-# then export with app-store distribution method using
-# the API key for provisioning.
+# Builds iOS IPA in release mode and uploads to TestFlight.
+# Strategy:
+#   1. Archive with automatic signing (development identity)
+#      and -allowProvisioningUpdates using the API key
+#   2. Export archive with app-store distribution method
+#      using the API key for provisioning
 # ──────────────────────────────────────────────────────
 
 workflows:
@@ -57,66 +57,17 @@ workflows:
           echo "Build number: $BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/Runner/Info.plist 2>/dev/null || true
 
-      - name: Configure Xcode project for manual signing
-        script: |
-          set -e
-
-          # Switch ALL targets to manual signing so there's no conflict
-          # when we specify distribution code signing identity
-
-          # First, disable automatic signing for the Runner target
-          xcrun xcodeproj \
-            -project ios/Runner.xcodeproj \
-            -target Runner \
-            -setSetting CODE_SIGN_STYLE Manual \
-            2>/dev/null || true
-
-          # Use PlistBuddy / sed approach as fallback
-          cd ios
-
-          # Disable automatic signing and set manual signing for Runner
-          /usr/libexec/PlistBuddy -c "Set :objects:$(xcodeproj -showBuildSettings -target Runner 2>/dev/null | grep 'CODE_SIGN_STYLE' | head -1 | awk '{print $3}') CODE_SIGN_STYLE Manual" Runner.xcodeproj/project.pbxproj 2>/dev/null || true
-
-          # Use ruby to modify the xcode project properly
-          ruby -e '
-            require "xcodeproj"
-            project = Xcodeproj::Project.open("Runner.xcodeproj")
-            project.targets.each do |target|
-              target.build_configurations.each do |config|
-                config.build_settings["CODE_SIGN_STYLE"] = "Manual"
-                config.build_settings["CODE_SIGN_IDENTITY"] = "Apple Distribution"
-                config.build_settings["DEVELOPMENT_TEAM"] = "852QBVFRUN"
-                config.build_settings["PROVISIONING_PROFILE_SPECIFIER"] = ""
-              end
-            end
-            project.save
-          ' 2>/dev/null || true
-
-          # Also update the Pods project
-          ruby -e '
-            require "xcodeproj"
-            project = Xcodeproj::Project.open("Pods/Pods.xcodeproj")
-            project.targets.each do |target|
-              target.build_configurations.each do |config|
-                config.build_settings["CODE_SIGN_STYLE"] = "Manual"
-                config.build_settings["CODE_SIGN_IDENTITY"] = "Apple Distribution"
-                config.build_settings["DEVELOPMENT_TEAM"] = "852QBVFRUN"
-                config.build_settings["PROVISIONING_PROFILE_SPECIFIER"] = ""
-              end
-            end
-            project.save
-          ' 2>/dev/null || true
-
-          echo "Xcode project signing configuration updated"
-
       - name: Build and export iOS IPA
         script: |
           set -eo pipefail
 
-          echo "=== Building iOS archive ==="
           cd ios
 
-          # Build archive with manual signing + API key provisioning
+          echo "=== Step 1: Building iOS archive ==="
+          # Use automatic signing with -allowProvisioningUpdates
+          # The API key in ~/private_keys/ enables Xcode to manage profiles
+          # We do NOT override CODE_SIGN_IDENTITY — let Xcode use development
+          # signing for the archive, then re-sign for distribution during export
           xcodebuild archive \
             -workspace Runner.xcworkspace \
             -scheme Runner \
@@ -128,17 +79,13 @@ workflows:
             -authenticationKeyPath ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8 \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="" \
             2>&1 | tee /tmp/archive.log
 
           echo ""
-          echo "=== Archive completed, checking output ==="
-          ls -la ../build/ios/archive/ 2>/dev/null || echo "Archive dir not found"
+          echo "=== Archive built successfully ==="
+          ls -la ../build/ios/archive/ 2>/dev/null
 
-          # Create ExportOptions.plist for app store distribution
+          # Create ExportOptions.plist for App Store distribution
           cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -155,7 +102,7 @@ workflows:
           EOF
 
           echo ""
-          echo "=== Exporting IPA for App Store ==="
+          echo "=== Step 2: Exporting IPA for App Store distribution ==="
           xcodebuild -exportArchive \
             -archivePath ../build/ios/archive/Runner.xcarchive \
             -exportPath ../build/ios/ipa \
@@ -167,7 +114,7 @@ workflows:
             2>&1 | tee /tmp/export.log
 
           echo ""
-          echo "=== IPA export completed ==="
+          echo "=== IPA exported successfully ==="
           find ../build/ios -name "*.ipa" 2>/dev/null
 
       - name: Upload to TestFlight
