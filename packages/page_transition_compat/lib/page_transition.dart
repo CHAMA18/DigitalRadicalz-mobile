@@ -45,10 +45,15 @@ class PageTransition<T> extends PageRouteBuilder<T> {
     this.ctx,
     super.settings,
     super.fullscreenDialog,
+    super.reverseDuration,
+    super.opaque,
+    super.barrierDismissible,
+    super.barrierColor,
+    super.barrierLabel,
+    super.maintainState,
   }) : super(
     pageBuilder: (context, animation, secondaryAnimation) => child,
     transitionDuration: duration,
-    curves: curve,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       switch (type) {
         case PageTransitionType.fade:
@@ -87,10 +92,11 @@ class PageTransition<T> extends PageRouteBuilder<T> {
           );
         case PageTransitionType.cupertino:
         case PageTransitionType.cupertinoPopup:
-          return CupertinoPageTransition(
-            primaryRouteAnimation: animation,
-            secondaryRouteAnimation: secondaryAnimation,
-            linearTransition: false,
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(1, 0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut)),
             child: child,
           );
         default:
@@ -98,33 +104,4 @@ class PageTransition<T> extends PageRouteBuilder<T> {
       }
     },
   );
-}
-
-class CupertinoPageTransition extends StatelessWidget {
-  final Animation<double> primaryRouteAnimation;
-  final Animation<double> secondaryRouteAnimation;
-  final Widget child;
-  final bool linearTransition;
-
-  const CupertinoPageTransition({
-    super.key,
-    required this.primaryRouteAnimation,
-    required this.secondaryRouteAnimation,
-    required this.child,
-    required this.linearTransition,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: const Offset(1, 0),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: primaryRouteAnimation,
-        curve: Curves.easeInOut,
-      )),
-      child: child,
-    );
-  }
 }
