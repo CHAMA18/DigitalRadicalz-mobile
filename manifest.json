@@ -1,0 +1,43 @@
+{
+    "name": "DigitalRadicalz",
+    "short_name": "DRz",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#1D2428",
+    "theme_color": "#1F7A8C",
+    "description": "DigitalRadicalz — Community platform for connection, collaboration, and growth.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ],
+    "categories": ["social", "lifestyle"],
+    "screenshots": [],
+    "shortcuts": [
+        {
+            "name": "Home Feed",
+            "url": "/?tab=home",
+            "icons": [{"src": "icons/Icon-192.png", "sizes": "192x192"}]
+        },
+        {
+            "name": "Chat",
+            "url": "/?tab=chat",
+            "icons": [{"src": "icons/Icon-192.png", "sizes": "192x192"}]
+        }
+    ]
+}
