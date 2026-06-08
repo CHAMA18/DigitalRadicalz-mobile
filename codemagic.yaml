@@ -4,13 +4,9 @@
 # Builds iOS IPA in release mode and uploads to TestFlight
 # using App Store Connect API key authentication.
 #
-# Code signing is handled manually via xcodebuild with
-# -allowProvisioningUpdates and API key auth flags.
-#
-# Required environment variables (in "app-store-connect" group):
-#   APP_STORE_CONNECT_KEY_ID     — Apple API Key ID
-#   APP_STORE_CONNECT_ISSUER_ID  — Apple API Issuer ID
-#   APP_STORE_CONNECT_PRIVATE_KEY — Full P8 key contents
+# Strategy: Archive with automatic development signing,
+# then export with app-store distribution method using
+# the API key for provisioning.
 # ──────────────────────────────────────────────────────
 
 workflows:
@@ -61,6 +57,58 @@ workflows:
           echo "Build number: $BUILD_NUMBER"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/Runner/Info.plist 2>/dev/null || true
 
+      - name: Configure Xcode project for manual signing
+        script: |
+          set -e
+
+          # Switch ALL targets to manual signing so there's no conflict
+          # when we specify distribution code signing identity
+
+          # First, disable automatic signing for the Runner target
+          xcrun xcodeproj \
+            -project ios/Runner.xcodeproj \
+            -target Runner \
+            -setSetting CODE_SIGN_STYLE Manual \
+            2>/dev/null || true
+
+          # Use PlistBuddy / sed approach as fallback
+          cd ios
+
+          # Disable automatic signing and set manual signing for Runner
+          /usr/libexec/PlistBuddy -c "Set :objects:$(xcodeproj -showBuildSettings -target Runner 2>/dev/null | grep 'CODE_SIGN_STYLE' | head -1 | awk '{print $3}') CODE_SIGN_STYLE Manual" Runner.xcodeproj/project.pbxproj 2>/dev/null || true
+
+          # Use ruby to modify the xcode project properly
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("Runner.xcodeproj")
+            project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings["CODE_SIGN_STYLE"] = "Manual"
+                config.build_settings["CODE_SIGN_IDENTITY"] = "Apple Distribution"
+                config.build_settings["DEVELOPMENT_TEAM"] = "852QBVFRUN"
+                config.build_settings["PROVISIONING_PROFILE_SPECIFIER"] = ""
+              end
+            end
+            project.save
+          ' 2>/dev/null || true
+
+          # Also update the Pods project
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("Pods/Pods.xcodeproj")
+            project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings["CODE_SIGN_STYLE"] = "Manual"
+                config.build_settings["CODE_SIGN_IDENTITY"] = "Apple Distribution"
+                config.build_settings["DEVELOPMENT_TEAM"] = "852QBVFRUN"
+                config.build_settings["PROVISIONING_PROFILE_SPECIFIER"] = ""
+              end
+            end
+            project.save
+          ' 2>/dev/null || true
+
+          echo "Xcode project signing configuration updated"
+
       - name: Build and export iOS IPA
         script: |
           set -eo pipefail
@@ -68,7 +116,7 @@ workflows:
           echo "=== Building iOS archive ==="
           cd ios
 
-          # Build archive with xcodebuild, allowing automatic provisioning
+          # Build archive with manual signing + API key provisioning
           xcodebuild archive \
             -workspace Runner.xcworkspace \
             -scheme Runner \
@@ -76,20 +124,22 @@ workflows:
             -archivePath ../build/ios/archive/Runner.xcarchive \
             -destination "generic/platform=iOS" \
             -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration \
             -authenticationKeyPath ~/private_keys/AuthKey_$APP_STORE_CONNECT_KEY_ID.p8 \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             2>&1 | tee /tmp/archive.log
 
           echo ""
-          echo "=== Archive completed ==="
+          echo "=== Archive completed, checking output ==="
           ls -la ../build/ios/archive/ 2>/dev/null || echo "Archive dir not found"
 
-          # Create ExportOptions.plist
-          cat > /tmp/ExportOptions.plist << 'EOF'
+          # Create ExportOptions.plist for app store distribution
+          cat > /tmp/ExportOptions.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
@@ -97,7 +147,7 @@ workflows:
             <key>method</key>
             <string>app-store</string>
             <key>teamID</key>
-            <string>852QBVFRUN</string>
+            <string>$TEAM_ID</string>
             <key>signingStyle</key>
             <string>automatic</string>
           </dict>
@@ -105,7 +155,7 @@ workflows:
           EOF
 
           echo ""
-          echo "=== Exporting IPA ==="
+          echo "=== Exporting IPA for App Store ==="
           xcodebuild -exportArchive \
             -archivePath ../build/ios/archive/Runner.xcarchive \
             -exportPath ../build/ios/ipa \
@@ -117,8 +167,8 @@ workflows:
             2>&1 | tee /tmp/export.log
 
           echo ""
-          echo "=== Export completed ==="
-          ls -la ../build/ios/ipa/ 2>/dev/null || echo "IPA dir not found"
+          echo "=== IPA export completed ==="
+          find ../build/ios -name "*.ipa" 2>/dev/null
 
       - name: Upload to TestFlight
         script: |
@@ -126,8 +176,10 @@ workflows:
 
           IPA_PATH=$(find build/ios/ipa -name "*.ipa" 2>/dev/null | head -1)
           if [ -z "$IPA_PATH" ]; then
+            IPA_PATH=$(find build/ios -name "*.ipa" 2>/dev/null | head -1)
+          fi
+          if [ -z "$IPA_PATH" ]; then
             echo "ERROR: No IPA found!"
-            find build/ios -name "*.ipa" 2>/dev/null
             exit 1
           fi
 
