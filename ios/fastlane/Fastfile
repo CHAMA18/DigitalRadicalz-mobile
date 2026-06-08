@@ -1,0 +1,149 @@
+# Fastfile — DigitalRadicalz TestFlight Deployment
+# ────────────────────────────────────────────────────
+# This Fastfile automates the complete iOS build + TestFlight upload
+# pipeline using App Store Connect API key authentication.
+# ────────────────────────────────────────────────────
+
+default_platform(:ios)
+
+# ── Platform: iOS ──────────────────────────────────
+
+platform :ios do
+  # ── Constants ────────────────────────────────────
+  APP_NAME       = "DigitalRadicalz"
+  SCHEME         = "Runner"
+  WORKSPACE      = "Runner.xcworkspace"
+  BUNDLE_ID      = "com.mycompany.brightwave"
+  TEAM_ID        = "852QBVFRUN"
+  KEY_ID         = ENV["APP_STORE_CONNECT_API_KEY_ID"]
+  ISSUER_ID      = ENV["APP_STORE_CONNECT_ISSUER_ID"]
+  KEY_FILEPATH   = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+
+  # ── Before All ──────────────────────────────────
+  before_all do
+    UI.message("──────────────────────────────────────")
+    UI.message("  DigitalRadicalz — Fastlane Pipeline")
+    UI.message("──────────────────────────────────────")
+    UI.message("Scheme:     #{SCHEME}")
+    UI.message("Bundle ID:  #{BUNDLE_ID}")
+    UI.message("Team ID:    #{TEAM_ID}")
+    UI.message("──────────────────────────────────────")
+  end
+
+  # ── Primary Lane: testflight ────────────────────
+  # Full pipeline: clean → build → archive → upload
+  desc "Build and deploy to TestFlight (full pipeline)"
+  lane :testflight do
+    # Step 1: Ensure clean build environment
+    clean_build_artifacts
+
+    # Step 2: Increment build number automatically
+    current_build = latest_testflight_build_number(
+      app_identifier: BUNDLE_ID
+    )
+    new_build = current_build + 1
+    UI.message("Incrementing build number: #{current_build} → #{new_build}")
+
+    # Step 3: Build the IPA
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      buildlog_path: "./build_logs",
+      derived_data_path: "./derived_data",
+      output_directory: "./build",
+      output_name: "#{APP_NAME}.ipa",
+      include_bitcode: false,
+      include_symbols: true,
+      xcargs: [
+        "COMPILER_INDEX_STORE_ENABLE=NO",
+        "OTHER_CFLAGS=-fembed-bitcode",
+        "DEBUG_INFORMATION_FORMAT=dwarf-with-dsym"
+      ].join(" "),
+      # App Store Connect API key authentication
+      api_key_path: KEY_FILEPATH,
+      api_key: {
+        key_id: KEY_ID,
+        issuer_id: ISSUER_ID,
+        key_filepath: KEY_FILEPATH
+      },
+      # Signing — managed by Fastlane via API key
+      export_options: {
+        method: "app-store",
+        signingStyle: "automatic",
+        teamID: TEAM_ID,
+        uploadBitcode: false,
+        uploadSymbols: true,
+        compileBitcode: false
+      }
+    )
+
+    # Step 4: Upload to TestFlight
+    upload_to_testflight(
+      api_key_path: KEY_FILEPATH,
+      api_key: {
+        key_id: KEY_ID,
+        issuer_id: ISSUER_ID,
+        key_filepath: KEY_FILEPATH
+      },
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Automated build via Fastlane — Build ##{new_build}",
+      submit_for_review: false,
+      automatic_release: false
+    )
+
+    UI.success("──────────────────────────────────────")
+    UI.success("  Build #{new_build} uploaded to TestFlight!")
+    UI.success("──────────────────────────────────────")
+  end
+
+  # ── Build-Only Lane ────────────────────────────
+  desc "Build the IPA without uploading (for testing)"
+  lane :build_only do
+    build_app(
+      workspace: WORKSPACE,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build",
+      output_name: "#{APP_NAME}.ipa",
+      include_bitcode: false,
+      include_symbols: true,
+      api_key_path: KEY_FILEPATH,
+      api_key: {
+        key_id: KEY_ID,
+        issuer_id: ISSUER_ID,
+        key_filepath: KEY_FILEPATH
+      }
+    )
+    UI.success("IPA built successfully at ./build/#{APP_NAME}.ipa")
+  end
+
+  # ── Upload-Only Lane ───────────────────────────
+  desc "Upload an existing IPA to TestFlight"
+  lane :upload_only do
+    upload_to_testflight(
+      api_key_path: KEY_FILEPATH,
+      api_key: {
+        key_id: KEY_ID,
+        issuer_id: ISSUER_ID,
+        key_filepath: KEY_FILEPATH
+      },
+      skip_waiting_for_build_processing: true,
+      changelog: "Manual upload via Fastlane"
+    )
+  end
+
+  # ── Error Handling ─────────────────────────────
+  error do |lane, exception|
+    UI.error("──────────────────────────────────────")
+    UI.error("  Fastlane error in lane: #{lane}")
+    UI.error("  #{exception.message}")
+    UI.error("──────────────────────────────────────")
+    # Clean up on failure
+    clean_build_artifacts
+  end
+end
