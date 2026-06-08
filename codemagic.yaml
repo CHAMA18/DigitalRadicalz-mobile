@@ -1,12 +1,24 @@
 # ──────────────────────────────────────────────────────
 # DigitalRadicalz — Codemagic CI/CD Configuration
 # ──────────────────────────────────────────────────────
-# Builds iOS IPA in release mode and uploads to TestFlight.
+# Builds iOS IPA in release mode and uploads to TestFlight
+# using App Store Connect API key authentication.
+#
 # Strategy:
-#   1. Archive with automatic signing (development identity)
+#   1. Archive with automatic signing + DEVELOPMENT_TEAM
 #      and -allowProvisioningUpdates using the API key
 #   2. Export archive with app-store distribution method
 #      using the API key for provisioning
+#   3. Upload IPA to TestFlight via altool
+#
+# PREREQUISITE: Apple Developer Program membership must
+# be active. If expired, visit:
+#   https://developer.apple.com/account/
+#
+# Required env vars (in "app-store-connect" group):
+#   APP_STORE_CONNECT_KEY_ID     — Apple API Key ID
+#   APP_STORE_CONNECT_ISSUER_ID  — Apple API Issuer ID
+#   APP_STORE_CONNECT_PRIVATE_KEY — Full P8 key contents
 # ──────────────────────────────────────────────────────
 
 workflows:
@@ -64,10 +76,6 @@ workflows:
           cd ios
 
           echo "=== Step 1: Building iOS archive ==="
-          # Use automatic signing with -allowProvisioningUpdates
-          # The API key in ~/private_keys/ enables Xcode to manage profiles
-          # We do NOT override CODE_SIGN_IDENTITY — let Xcode use development
-          # signing for the archive, then re-sign for distribution during export
           xcodebuild archive \
             -workspace Runner.xcworkspace \
             -scheme Runner \
